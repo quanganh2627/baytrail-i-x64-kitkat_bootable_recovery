@@ -85,7 +85,7 @@ ifeq ($(HAVE_SELINUX),true)
   LOCAL_CFLAGS += -DHAVE_SELINUX
 endif # HAVE_SELINUX
 
-LOCAL_C_INCLUDES += system/extras/ext4_utils
+LOCAL_C_INCLUDES += system/extras/ext4_utils bionic/libc/private
 
 include $(BUILD_EXECUTABLE)
 
@@ -105,6 +105,9 @@ LOCAL_STATIC_LIBRARIES := \
     libcutils \
     libstdc++ \
     libc
+
+LOCAL_C_INCLUDES += bionic/libc/private
+
 include $(BUILD_EXECUTABLE)
 
 
