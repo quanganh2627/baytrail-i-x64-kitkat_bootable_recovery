@@ -371,8 +371,14 @@ copy_sideloaded_package(const char* original_path) {
   }
 
   char copy_path[PATH_MAX];
-  strcpy(copy_path, SIDELOAD_TEMP_DIR);
-  strcat(copy_path, "/package.zip");
+  if (strlcpy(copy_path, SIDELOAD_TEMP_DIR, PATH_MAX) > PATH_MAX) {
+    LOGE("Path too long !\n");
+    return NULL;
+  }
+  if (strlcat(copy_path, "/package.zip", PATH_MAX) > PATH_MAX) {
+    LOGE("Path too long !\n");
+    return NULL;
+  }
 
   char* buffer = (char*)malloc(BUFSIZ);
   if (buffer == NULL) {
