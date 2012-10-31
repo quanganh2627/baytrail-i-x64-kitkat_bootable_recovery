@@ -28,6 +28,7 @@ extern "C" {
 
 #define LOGE(format, ...) \
     do { \
+        fprintf(stderr, "E:" format, ##__VA_ARGS__); \
         __libc_android_log_print(ANDROID_LOG_ERROR, "Recovery", (format), ##__VA_ARGS__ ); \
     } while (0)
 #define LOGW(format, ...) \
