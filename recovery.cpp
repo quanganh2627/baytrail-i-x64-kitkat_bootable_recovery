@@ -267,9 +267,9 @@ static void create_recoveryfail_file(void)
         LOGE("Can't create fail file\n");
     } else {
         LOGI("Recovery fail file created\n");
+        fclose(recfail);
     }
 
-    fclose(recfail);
 }
 
 // clear the recovery command and prepare to boot a (hopefully working) system,
