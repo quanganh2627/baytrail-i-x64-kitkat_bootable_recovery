@@ -156,7 +156,8 @@ fopen_path(const char *path, const char *mode) {
 static void
 check_and_fclose(FILE *fp, const char *name) {
     fflush(fp);
-    if (ferror(fp)) LOGE("Error in %s\n(%s)\n", name, strerror(errno));
+    if (ferror(fp))
+        LOGE("Error in %s\n(%s)\n", name, strerror(errno));
     fclose(fp);
 }
 
@@ -264,9 +265,9 @@ static void create_recoveryfail_file(void)
 {
     FILE *recfail = fopen_path(REC_FAIL_FILE, "w");
     if (recfail == NULL) {
-        LOGE("Can't create fail file\n");
+        LOGE("Can't create fail file %s\n", REC_FAIL_FILE);
     } else {
-        LOGI("Recovery fail file created\n");
+        LOGI("Recovery fail file %s created\n", REC_FAIL_FILE);
         fclose(recfail);
     }
 
@@ -911,7 +912,7 @@ main(int argc, char **argv) {
             char* modified_path = (char*)malloc(len);
             strlcpy(modified_path, "/cache/", len);
             strlcat(modified_path, update_package+6, len);
-            printf("(replacing path \"%s\" with \"%s\")\n",
+            LOGI("Replacing path \"%s\" with \"%s\"\n",
                    update_package, modified_path);
             update_package = modified_path;
         }
@@ -924,13 +925,16 @@ main(int argc, char **argv) {
     int status = INSTALL_SUCCESS;
 
     if (update_package != NULL) {
+        LOGI("Install package %s\n", update_package);
         status = install_package(update_package, &wipe_cache, TEMPORARY_INSTALL_FILE);
         if (status == INSTALL_SUCCESS && wipe_cache) {
+            LOGI("Package %s installed. Erase cache volume\n", update_package);
             if (erase_volume("/cache")) {
                 LOGE("Cache wipe (requested by package) failed.");
             }
         }
         if (status != INSTALL_SUCCESS) {
+            LOGE("Install of %s failed with status %d\n", update_package, status);
             create_recoveryfail_file();
             ui->Print("Installation aborted.\n");
         }
@@ -951,6 +955,7 @@ main(int argc, char **argv) {
     }
 
     if (status == INSTALL_ERROR || status == INSTALL_CORRUPT) {
+        LOGE("Installation failed with status %d\n", status);
         ui->SetBackground(RecoveryUI::ERROR);
     }
     if (status != INSTALL_SUCCESS || ui->IsTextVisible()) {
@@ -968,6 +973,8 @@ main(int argc, char **argv) {
     // Otherwise, get ready to boot the main system...
     finish_recovery(send_intent);
     ui->Print("Rebooting...\n");
+
+    LOGI("Rebooting flag=0\n");
     android_reboot(ANDROID_RB_RESTART, 0, 0);
     return EXIT_SUCCESS;
 }
