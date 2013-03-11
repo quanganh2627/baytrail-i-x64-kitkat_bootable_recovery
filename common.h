@@ -23,28 +23,17 @@
 extern "C" {
 #endif
 
-#include "logd.h"
-
-
-#define LOGE(format, ...) \
-    do { \
-        fprintf(stderr, "E:" format, ##__VA_ARGS__); \
-        __libc_android_log_print(ANDROID_LOG_ERROR, "Recovery", (format), ##__VA_ARGS__ ); \
-    } while (0)
-#define LOGW(format, ...) \
-    __libc_android_log_print(ANDROID_LOG_WARN, "Recovery", (format), ##__VA_ARGS__ )
-#define LOGI(format, ...) \
-    __libc_android_log_print(ANDROID_LOG_INFO, "Recovery", (format), ##__VA_ARGS__ )
+// TODO: restore ui_print for LOGE
+#define LOGE(...) fprintf(stdout, "E:" __VA_ARGS__)
+#define LOGW(...) fprintf(stdout, "W:" __VA_ARGS__)
+#define LOGI(...) fprintf(stdout, "I:" __VA_ARGS__)
 
 #if 0
 #define LOGV(...) fprintf(stdout, "V:" __VA_ARGS__)
 #define LOGD(...) fprintf(stdout, "D:" __VA_ARGS__)
 #else
-#define LOGV(format, ...) \
-    __libc_android_log_print(ANDROID_LOG_VERBOSE, "Recovery", (format), ##__VA_ARGS__ )
-#define LOGD(format, ...) \
-    __libc_android_log_print(ANDROID_LOG_DEBUG, "Recovery", (format), ##__VA_ARGS__ )
-
+#define LOGV(...) do {} while (0)
+#define LOGD(...) do {} while (0)
 #endif
 
 #define STRINGIFY(x) #x

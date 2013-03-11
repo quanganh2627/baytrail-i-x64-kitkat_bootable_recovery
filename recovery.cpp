@@ -61,7 +61,6 @@ static const struct option OPTIONS[] = {
 static const char *COMMAND_FILE = "/cache/recovery/command";
 static const char *INTENT_FILE = "/cache/recovery/intent";
 static const char *LOG_FILE = "/cache/recovery/log";
-static const char *REC_FAIL_FILE = "/cache/recovery/recoveryfail";
 static const char *LAST_LOG_FILE = "/cache/recovery/last_log";
 static const char *LAST_INSTALL_FILE = "/cache/recovery/last_install";
 static const char *LOCALE_FILE = "/cache/recovery/last_locale";
@@ -260,17 +259,6 @@ copy_log_file(const char* source, const char* destination, int append) {
     }
 }
 
-static void create_recoveryfail_file(void)
-{
-    FILE *recfail = fopen_path(REC_FAIL_FILE, "w");
-    if (recfail == NULL) {
-        LOGE("Can't create fail file\n");
-    } else {
-        LOGI("Recovery fail file created\n");
-        fclose(recfail);
-    }
-
-}
 
 // clear the recovery command and prepare to boot a (hopefully working) system,
 // copy our log file to cache as well (for the system to read), and
@@ -383,14 +371,8 @@ copy_sideloaded_package(const char* original_path) {
   }
 
   char copy_path[PATH_MAX];
-  if (strlcpy(copy_path, SIDELOAD_TEMP_DIR, PATH_MAX) > PATH_MAX) {
-    LOGE("Path too long !\n");
-    return NULL;
-  }
-  if (strlcat(copy_path, "/package.zip", PATH_MAX) > PATH_MAX) {
-    LOGE("Path too long !\n");
-    return NULL;
-  }
+  strcpy(copy_path, SIDELOAD_TEMP_DIR);
+  strcat(copy_path, "/package.zip");
 
   char* buffer = (char*)malloc(BUFSIZ);
   if (buffer == NULL) {
@@ -930,13 +912,7 @@ main(int argc, char **argv) {
                 LOGE("Cache wipe (requested by package) failed.");
             }
         }
-        if (status != INSTALL_SUCCESS) {
-            create_recoveryfail_file();
-            ui->Print("Installation aborted.\n");
-        }
-        if (unlink(update_package) < 0 && errno != ENOENT) {
-            LOGE("Delete %s failed (%s)\n", update_package, strerror(errno));
-        }
+        if (status != INSTALL_SUCCESS) ui->Print("Installation aborted.\n");
     } else if (wipe_data) {
         if (device->WipeData()) status = INSTALL_ERROR;
         if (erase_volume("/data")) status = INSTALL_ERROR;
@@ -954,14 +930,6 @@ main(int argc, char **argv) {
         ui->SetBackground(RecoveryUI::ERROR);
     }
     if (status != INSTALL_SUCCESS || ui->IsTextVisible()) {
-        if (status == INSTALL_NONE) {
-            // Set to default timeout
-            LOGI("Set timeout to %d s.\n", UI_WAIT_KEY_TIMEOUT_SEC);
-            ui->SetTimeout(UI_WAIT_KEY_TIMEOUT_SEC);
-        } else {
-            LOGI("Set timeout to %d s.\n", UI_WAIT_ERROR_TIMEOUT_SEC);
-            ui->SetTimeout(UI_WAIT_ERROR_TIMEOUT_SEC);
-        }
         prompt_and_wait(device, status);
     }
 
