@@ -61,6 +61,7 @@ static const struct option OPTIONS[] = {
 static const char *COMMAND_FILE = "/cache/recovery/command";
 static const char *INTENT_FILE = "/cache/recovery/intent";
 static const char *LOG_FILE = "/cache/recovery/log";
+static const char *REC_FAIL_FILE = "/cache/recovery/recoveryfail";
 static const char *LAST_LOG_FILE = "/cache/recovery/last_log";
 static const char *LAST_INSTALL_FILE = "/cache/recovery/last_install";
 static const char *LOCALE_FILE = "/cache/recovery/last_locale";
@@ -155,7 +156,8 @@ fopen_path(const char *path, const char *mode) {
 static void
 check_and_fclose(FILE *fp, const char *name) {
     fflush(fp);
-    if (ferror(fp)) LOGE("Error in %s\n(%s)\n", name, strerror(errno));
+    if (ferror(fp))
+        LOGE("Error in %s\n(%s)\n", name, strerror(errno));
     fclose(fp);
 }
 
@@ -259,6 +261,17 @@ copy_log_file(const char* source, const char* destination, int append) {
     }
 }
 
+static void create_recoveryfail_file(void)
+{
+    FILE *recfail = fopen_path(REC_FAIL_FILE, "w");
+    if (recfail == NULL) {
+        LOGE("Can't create fail file %s\n", REC_FAIL_FILE);
+    } else {
+        LOGI("Recovery fail file %s created\n", REC_FAIL_FILE);
+        fclose(recfail);
+    }
+
+}
 
 // clear the recovery command and prepare to boot a (hopefully working) system,
 // copy our log file to cache as well (for the system to read), and
@@ -371,8 +384,14 @@ copy_sideloaded_package(const char* original_path) {
   }
 
   char copy_path[PATH_MAX];
-  strcpy(copy_path, SIDELOAD_TEMP_DIR);
-  strcat(copy_path, "/package.zip");
+  if (strlcpy(copy_path, SIDELOAD_TEMP_DIR, PATH_MAX) > PATH_MAX) {
+    LOGE("Path too long !\n");
+    return NULL;
+  }
+  if (strlcat(copy_path, "/package.zip", PATH_MAX) > PATH_MAX) {
+    LOGE("Path too long !\n");
+    return NULL;
+  }
 
   char* buffer = (char*)malloc(BUFSIZ);
   if (buffer == NULL) {
@@ -893,7 +912,7 @@ main(int argc, char **argv) {
             char* modified_path = (char*)malloc(len);
             strlcpy(modified_path, "/cache/", len);
             strlcat(modified_path, update_package+6, len);
-            printf("(replacing path \"%s\" with \"%s\")\n",
+            LOGI("Replacing path \"%s\" with \"%s\"\n",
                    update_package, modified_path);
             update_package = modified_path;
         }
@@ -906,13 +925,22 @@ main(int argc, char **argv) {
     int status = INSTALL_SUCCESS;
 
     if (update_package != NULL) {
+        LOGI("Install package %s\n", update_package);
         status = install_package(update_package, &wipe_cache, TEMPORARY_INSTALL_FILE);
         if (status == INSTALL_SUCCESS && wipe_cache) {
+            LOGI("Package %s installed. Erase cache volume\n", update_package);
             if (erase_volume("/cache")) {
                 LOGE("Cache wipe (requested by package) failed.");
             }
         }
-        if (status != INSTALL_SUCCESS) ui->Print("Installation aborted.\n");
+        if (status != INSTALL_SUCCESS) {
+            LOGE("Install of %s failed with status %d\n", update_package, status);
+            create_recoveryfail_file();
+            ui->Print("Installation aborted.\n");
+        }
+        if (unlink(update_package) < 0 && errno != ENOENT) {
+            LOGE("Delete %s failed (%s)\n", update_package, strerror(errno));
+        }
     } else if (wipe_data) {
         if (device->WipeData()) status = INSTALL_ERROR;
         if (erase_volume("/data")) status = INSTALL_ERROR;
@@ -927,15 +955,26 @@ main(int argc, char **argv) {
     }
 
     if (status == INSTALL_ERROR || status == INSTALL_CORRUPT) {
+        LOGE("Installation failed with status %d\n", status);
         ui->SetBackground(RecoveryUI::ERROR);
     }
     if (status != INSTALL_SUCCESS || ui->IsTextVisible()) {
+        if (status == INSTALL_NONE) {
+            // Set to default timeout
+            LOGI("Set timeout to %d s.\n", UI_WAIT_KEY_TIMEOUT_SEC);
+            ui->SetTimeout(UI_WAIT_KEY_TIMEOUT_SEC);
+        } else {
+            LOGI("Set timeout to %d s.\n", UI_WAIT_ERROR_TIMEOUT_SEC);
+            ui->SetTimeout(UI_WAIT_ERROR_TIMEOUT_SEC);
+        }
         prompt_and_wait(device, status);
     }
 
     // Otherwise, get ready to boot the main system...
     finish_recovery(send_intent);
     ui->Print("Rebooting...\n");
+
+    LOGI("Rebooting flag=0\n");
     android_reboot(ANDROID_RB_RESTART, 0, 0);
     return EXIT_SUCCESS;
 }
