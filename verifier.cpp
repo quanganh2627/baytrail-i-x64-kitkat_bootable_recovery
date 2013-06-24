@@ -33,6 +33,9 @@ extern RecoveryUI* ui;
 //
 // Return VERIFY_SUCCESS, VERIFY_FAILURE (if any error is encountered
 // or no key matches the signature).
+#define FOOTER_SIZE 6
+#define EOCD_HEADER_SIZE 22
+#define BUFFER_SIZE 4096
 
 int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKeys) {
     ui->SetProgress(0.0);
@@ -52,8 +55,6 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     // us how far back from the end we have to start reading to find
     // the whole comment.
 
-#define FOOTER_SIZE 6
-
     if (fseek(f, -FOOTER_SIZE, SEEK_END) != 0) {
         LOGE("failed to seek in %s (%s)\n", path, strerror(errno));
         fclose(f);
@@ -68,6 +69,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     }
 
     if (footer[2] != 0xff || footer[3] != 0xff) {
+        LOGE("end of footer from %s not 0xFFFF (%s)\n", path, strerror(errno));
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -79,12 +81,10 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     if (signature_start - FOOTER_SIZE < RSANUMBYTES) {
         // "signature" block isn't big enough to contain an RSA block.
-        LOGE("signature is too short\n");
+        LOGE("signature from %s is too short\n", path);
         fclose(f);
         return VERIFY_FAILURE;
     }
-
-#define EOCD_HEADER_SIZE 22
 
     // The end-of-central-directory record is 22 bytes plus any
     // comment length.
@@ -118,7 +118,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     // magic number $50 $4b $05 $06.
     if (eocd[0] != 0x50 || eocd[1] != 0x4b ||
         eocd[2] != 0x05 || eocd[3] != 0x06) {
-        LOGE("signature length doesn't match EOCD marker\n");
+        LOGE("signature length from %s doesn't match EOCD marker\n", path);
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -137,8 +137,6 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         }
     }
 
-#define BUFFER_SIZE 4096
-
     SHA_CTX ctx;
     SHA_init(&ctx);
     unsigned char* buffer = (unsigned char*)malloc(BUFFER_SIZE);
@@ -150,7 +148,13 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     double frac = -1.0;
     size_t so_far = 0;
-    fseek(f, 0, SEEK_SET);
+
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        LOGE("failed to seek beginning of %s (%s)\n", path, strerror(errno));
+        fclose(f);
+        return VERIFY_FAILURE;
+    }
+
     while (so_far < signed_len) {
         size_t size = BUFFER_SIZE;
         if (signed_len - so_far < size) size = signed_len - so_far;
@@ -176,15 +180,16 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         // the signing tool appends after the signature itself.
         if (RSA_verify(pKeys+i, eocd + eocd_size - 6 - RSANUMBYTES,
                        RSANUMBYTES, sha1)) {
-            LOGI("whole-file signature verified against key %d\n", i);
+            LOGI("whole-file signature verified against key %d for %s\n", i, path);
             free(eocd);
             return VERIFY_SUCCESS;
         } else {
             LOGI("failed to verify against key %d\n", i);
         }
     }
+
     free(eocd);
-    LOGE("failed to verify whole-file signature\n");
+    LOGE("failed to verify whole-file signature from %s\n", path);
     return VERIFY_FAILURE;
 }
 
