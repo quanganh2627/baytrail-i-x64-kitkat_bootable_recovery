@@ -40,6 +40,7 @@
 
 #ifdef USE_EXT4
 #include "make_ext4fs.h"
+int g_wipe_flag = WIPE_FALLBACK;
 #endif
 
 // mount(fs_type, partition_type, location, mount_point)
@@ -205,7 +206,9 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
     char* location;
     char* fs_size;
     char* mount_point;
-
+#ifdef USE_EXT4
+    char value[PROPERTY_VALUE_MAX];
+#endif
     if (ReadArgs(state, argv, 5, &fs_type, &partition_type, &location, &fs_size, &mount_point) < 0) {
         return NULL;
     }
@@ -258,7 +261,13 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
         result = location;
 #ifdef USE_EXT4
     } else if (strcmp(fs_type, "ext4") == 0) {
-        int status = make_ext4fs(location, atoll(fs_size), mount_point, sehandle);
+        /* get the wipe flag for unsecure, secure, or no wipe */
+        int len = property_get("ro.g_wipe_flag", value, NULL);
+        if (len == 1) {
+            g_wipe_flag = atoi(value);
+        }
+
+        int status = make_ext4fs(location, atoll(fs_size), mount_point, sehandle, g_wipe_flag);
         if (status != 0) {
             fprintf(stderr, "%s: make_ext4fs failed (%d) on %s",
                     name, status, location);

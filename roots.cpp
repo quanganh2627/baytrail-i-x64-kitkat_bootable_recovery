@@ -28,10 +28,18 @@
 #include "roots.h"
 #include "common.h"
 #include "make_ext4fs.h"
-
+#include "cutils/properties.h"
 static struct fstab *fstab = NULL;
 
 extern struct selabel_handle *sehandle;
+
+/* Flag to set which wipe feature will be use while erasing
+ * To be used carefully especially for production & care
+ * Should only be used during power-on or engineering
+ * Has to be used on mechanical hard-drives until we query disk's capabilities
+ * */
+int g_wipe_flag = WIPE_FALLBACK;
+
 
 void load_volume_table()
 {
@@ -148,6 +156,8 @@ int ensure_path_unmounted(const char* path) {
 
 int format_volume(const char* volume) {
     Volume* v = volume_for_path(volume);
+    char value[PROPERTY_VALUE_MAX+1];
+
     if (v == NULL) {
         LOGE("unknown volume \"%s\"\n", volume);
         return -1;
@@ -191,7 +201,13 @@ int format_volume(const char* volume) {
     }
 
     if (strcmp(v->fs_type, "ext4") == 0) {
-        int result = make_ext4fs(v->blk_device, v->length, volume, sehandle);
+        /* get the wipe flag for unsecure, secure, or no wipe */
+        int len = property_get("ro.g_wipe_flag", value, NULL);
+        if (len == 1) {
+            g_wipe_flag = atoi(value);
+        }
+
+        int result = make_ext4fs(v->blk_device, v->length, volume, sehandle, g_wipe_flag);
         if (result != 0) {
             LOGE("format_volume: make_extf4fs failed on %s\n", v->blk_device);
             return -1;
