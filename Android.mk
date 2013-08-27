@@ -32,6 +32,7 @@ LOCAL_MODULE := recovery
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 
 RECOVERY_API_VERSION := 3
+RECOVERY_FSTAB_VERSION := 2
 LOCAL_CFLAGS += -DRECOVERY_API_VERSION=$(RECOVERY_API_VERSION)
 
 LOCAL_STATIC_LIBRARIES := \
@@ -45,7 +46,10 @@ LOCAL_STATIC_LIBRARIES := \
     libminui \
     libpixelflinger_static \
     libpng \
+    libfs_mgr \
     libcutils \
+    liblog \
+    libselinux \
     libstdc++ \
     libm \
     libc
@@ -55,12 +59,6 @@ ifeq ($(TARGET_USERIMAGES_USE_EXT4), true)
     LOCAL_C_INCLUDES += system/extras/ext4_utils
     LOCAL_STATIC_LIBRARIES += libext4_utils_static libz
 endif
-
-ifeq ($(HAVE_SELINUX), true)
-  LOCAL_C_INCLUDES += external/libselinux/include
-  LOCAL_STATIC_LIBRARIES += libselinux
-  LOCAL_CFLAGS += -DHAVE_SELINUX
-endif # HAVE_SELINUX
 
 # This binary is in the recovery ramdisk, which is otherwise a copy of root.
 # It gets copied there in config/Makefile.  LOCAL_MODULE_TAGS suppresses
@@ -74,11 +72,10 @@ else
   LOCAL_STATIC_LIBRARIES += $(TARGET_RECOVERY_UI_LIB)
 endif
 
-ifeq ($(HAVE_SELINUX),true)
-  LOCAL_C_INCLUDES += external/libselinux/include
-  LOCAL_STATIC_LIBRARIES += libselinux
-  LOCAL_CFLAGS += -DHAVE_SELINUX
-endif # HAVE_SELINUX
+#libpixelflinger_static for x86 is using encoder under hardware/intel/apache-harmony
+ifeq ($(TARGET_ARCH),x86)
+LOCAL_STATIC_LIBRARIES += libenc
+endif
 
 LOCAL_C_INCLUDES += system/extras/ext4_utils
 

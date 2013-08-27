@@ -33,6 +33,9 @@ extern RecoveryUI* ui;
 //
 // Return VERIFY_SUCCESS, VERIFY_FAILURE (if any error is encountered
 // or no key matches the signature).
+#define FOOTER_SIZE 6
+#define EOCD_HEADER_SIZE 22
+#define BUFFER_SIZE 4096
 
 int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKeys) {
     ui->SetProgress(0.0);
@@ -52,8 +55,6 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     // us how far back from the end we have to start reading to find
     // the whole comment.
 
-#define FOOTER_SIZE 6
-
     if (fseek(f, -FOOTER_SIZE, SEEK_END) != 0) {
         LOGE("failed to seek in %s (%s)\n", path, strerror(errno));
         fclose(f);
@@ -68,6 +69,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     }
 
     if (footer[2] != 0xff || footer[3] != 0xff) {
+        LOGE("end of footer from %s not 0xFFFF (%s)\n", path, strerror(errno));
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -79,12 +81,10 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     if (signature_start - FOOTER_SIZE < RSANUMBYTES) {
         // "signature" block isn't big enough to contain an RSA block.
-        LOGE("signature is too short\n");
+        LOGE("signature from %s is too short\n", path);
         fclose(f);
         return VERIFY_FAILURE;
     }
-
-#define EOCD_HEADER_SIZE 22
 
     // The end-of-central-directory record is 22 bytes plus any
     // comment length.
@@ -118,7 +118,7 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
     // magic number $50 $4b $05 $06.
     if (eocd[0] != 0x50 || eocd[1] != 0x4b ||
         eocd[2] != 0x05 || eocd[3] != 0x06) {
-        LOGE("signature length doesn't match EOCD marker\n");
+        LOGE("signature length from %s doesn't match EOCD marker\n", path);
         fclose(f);
         return VERIFY_FAILURE;
     }
@@ -137,8 +137,6 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         }
     }
 
-#define BUFFER_SIZE 4096
-
     SHA_CTX ctx;
     SHA_init(&ctx);
     unsigned char* buffer = (unsigned char*)malloc(BUFFER_SIZE);
@@ -150,7 +148,13 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
 
     double frac = -1.0;
     size_t so_far = 0;
-    fseek(f, 0, SEEK_SET);
+
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        LOGE("failed to seek beginning of %s (%s)\n", path, strerror(errno));
+        fclose(f);
+        return VERIFY_FAILURE;
+    }
+
     while (so_far < signed_len) {
         size_t size = BUFFER_SIZE;
         if (signed_len - so_far < size) size = signed_len - so_far;
@@ -176,12 +180,115 @@ int verify_file(const char* path, const RSAPublicKey *pKeys, unsigned int numKey
         // the signing tool appends after the signature itself.
         if (RSA_verify(pKeys+i, eocd + eocd_size - 6 - RSANUMBYTES,
                        RSANUMBYTES, sha1)) {
-            LOGI("whole-file signature verified against key %d\n", i);
+            LOGI("whole-file signature verified against key %d for %s\n", i, path);
             free(eocd);
             return VERIFY_SUCCESS;
+        } else {
+            LOGI("failed to verify against key %d\n", i);
         }
     }
+
     free(eocd);
-    LOGE("failed to verify whole-file signature\n");
+    LOGE("failed to verify whole-file signature from %s\n", path);
     return VERIFY_FAILURE;
+}
+
+// Reads a file containing one or more public keys as produced by
+// DumpPublicKey:  this is an RSAPublicKey struct as it would appear
+// as a C source literal, eg:
+//
+//  "{64,0xc926ad21,{1795090719,...,-695002876},{-857949815,...,1175080310}}"
+//
+// For key versions newer than the original 2048-bit e=3 keys
+// supported by Android, the string is preceded by a version
+// identifier, eg:
+//
+//  "v2 {64,0xc926ad21,{1795090719,...,-695002876},{-857949815,...,1175080310}}"
+//
+// (Note that the braces and commas in this example are actual
+// characters the parser expects to find in the file; the ellipses
+// indicate more numbers omitted from this example.)
+//
+// The file may contain multiple keys in this format, separated by
+// commas.  The last key must not be followed by a comma.
+//
+// Returns NULL if the file failed to parse, or if it contain zero keys.
+RSAPublicKey*
+load_keys(const char* filename, int* numKeys) {
+    RSAPublicKey* out = NULL;
+    *numKeys = 0;
+
+    FILE* f = fopen(filename, "r");
+    if (f == NULL) {
+        LOGE("opening %s: %s\n", filename, strerror(errno));
+        goto exit;
+    }
+
+    {
+        int i;
+        bool done = false;
+        while (!done) {
+            ++*numKeys;
+            out = (RSAPublicKey*)realloc(out, *numKeys * sizeof(RSAPublicKey));
+            RSAPublicKey* key = out + (*numKeys - 1);
+
+            char start_char;
+            if (fscanf(f, " %c", &start_char) != 1) goto exit;
+            if (start_char == '{') {
+                // a version 1 key has no version specifier.
+                key->exponent = 3;
+            } else if (start_char == 'v') {
+                int version;
+                if (fscanf(f, "%d {", &version) != 1) goto exit;
+                if (version == 2) {
+                    key->exponent = 65537;
+                } else {
+                    goto exit;
+                }
+            }
+
+            if (fscanf(f, " %i , 0x%x , { %u",
+                       &(key->len), &(key->n0inv), &(key->n[0])) != 3) {
+                goto exit;
+            }
+            if (key->len != RSANUMWORDS) {
+                LOGE("key length (%d) does not match expected size\n", key->len);
+                goto exit;
+            }
+            for (i = 1; i < key->len; ++i) {
+                if (fscanf(f, " , %u", &(key->n[i])) != 1) goto exit;
+            }
+            if (fscanf(f, " } , { %u", &(key->rr[0])) != 1) goto exit;
+            for (i = 1; i < key->len; ++i) {
+                if (fscanf(f, " , %u", &(key->rr[i])) != 1) goto exit;
+            }
+            fscanf(f, " } } ");
+
+            // if the line ends in a comma, this file has more keys.
+            switch (fgetc(f)) {
+            case ',':
+                // more keys to come.
+                break;
+
+            case EOF:
+                done = true;
+                break;
+
+            default:
+                LOGE("unexpected character between keys\n");
+                goto exit;
+            }
+
+            LOGI("read key e=%d\n", key->exponent);
+        }
+    }
+
+    fclose(f);
+    return out;
+
+exit:
+    if (f) fclose(f);
+    free(out);
+    *numKeys = 0;
+    return NULL;
 }

@@ -15,11 +15,13 @@
  */
 
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
 #include <linux/input.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +29,6 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <dirent.h>
 
 #include "bootloader.h"
 #include "common.h"
@@ -58,10 +59,12 @@ static const struct option OPTIONS[] = {
   { NULL, 0, NULL, 0 },
 };
 
+#define LAST_LOG_FILE "/cache/recovery/last_log"
+
 static const char *COMMAND_FILE = "/cache/recovery/command";
 static const char *INTENT_FILE = "/cache/recovery/intent";
 static const char *LOG_FILE = "/cache/recovery/log";
-static const char *LAST_LOG_FILE = "/cache/recovery/last_log";
+static const char *REC_FAIL_FILE = "/cache/recovery/recoveryfail";
 static const char *LAST_INSTALL_FILE = "/cache/recovery/last_install";
 static const char *LOCALE_FILE = "/cache/recovery/last_locale";
 static const char *CACHE_ROOT = "/cache";
@@ -155,7 +158,8 @@ fopen_path(const char *path, const char *mode) {
 static void
 check_and_fclose(FILE *fp, const char *name) {
     fflush(fp);
-    if (ferror(fp)) LOGE("Error in %s\n(%s)\n", name, strerror(errno));
+    if (ferror(fp))
+        LOGE("Error in %s\n(%s)\n", name, strerror(errno));
     fclose(fp);
 }
 
@@ -259,7 +263,34 @@ copy_log_file(const char* source, const char* destination, int append) {
     }
 }
 
+// Rename last_log -> last_log.1 -> last_log.2 -> ... -> last_log.$max
+// Overwrites any existing last_log.$max.
+static void
+rotate_last_logs(int max) {
+    char oldfn[256];
+    char newfn[256];
 
+    int i;
+    for (i = max-1; i >= 0; --i) {
+        snprintf(oldfn, sizeof(oldfn), (i==0) ? LAST_LOG_FILE : (LAST_LOG_FILE ".%d"), i);
+        snprintf(newfn, sizeof(newfn), LAST_LOG_FILE ".%d", i+1);
+        // ignore errors
+        rename(oldfn, newfn);
+    }
+}
+
+
+static void create_recoveryfail_file(void)
+{
+    FILE *recfail = fopen_path(REC_FAIL_FILE, "w");
+    if (recfail == NULL) {
+        LOGE("Can't create fail file %s\n", REC_FAIL_FILE);
+    } else {
+        LOGI("Recovery fail file %s created\n", REC_FAIL_FILE);
+        fclose(recfail);
+    }
+
+}
 // clear the recovery command and prepare to boot a (hopefully working) system,
 // copy our log file to cache as well (for the system to read), and
 // record any intent we were asked to communicate back to the system.
@@ -371,8 +402,14 @@ copy_sideloaded_package(const char* original_path) {
   }
 
   char copy_path[PATH_MAX];
-  strcpy(copy_path, SIDELOAD_TEMP_DIR);
-  strcat(copy_path, "/package.zip");
+  if (strlcpy(copy_path, SIDELOAD_TEMP_DIR, PATH_MAX) > PATH_MAX) {
+    LOGE("Path too long !\n");
+    return NULL;
+  }
+  if (strlcat(copy_path, "/package.zip", PATH_MAX) > PATH_MAX) {
+    LOGE("Path too long !\n");
+    return NULL;
+  }
 
   char* buffer = (char*)malloc(BUFSIZ);
   if (buffer == NULL) {
@@ -704,7 +741,6 @@ prompt_and_wait(Device* device, int status) {
                 break;
 
             case Device::WIPE_CACHE:
-                ui->ShowText(false);
                 ui->Print("\n-- Wiping cache...\n");
                 erase_volume("/cache");
                 ui->Print("Cache wipe complete.\n");
@@ -802,6 +838,24 @@ load_locale_from_cache() {
     }
 }
 
+static RecoveryUI* gCurrentUI = NULL;
+
+void
+ui_print(const char* format, ...) {
+    char buffer[256];
+
+    va_list ap;
+    va_start(ap, format);
+    vsnprintf(buffer, sizeof(buffer), format, ap);
+    va_end(ap);
+
+    if (gCurrentUI != NULL) {
+        gCurrentUI->Print("%s", buffer);
+    } else {
+        fputs(buffer, stdout);
+    }
+}
+
 int
 main(int argc, char **argv) {
     time_t start = time(NULL);
@@ -825,6 +879,8 @@ main(int argc, char **argv) {
     printf("Starting recovery on %s", ctime(&start));
 
     load_volume_table();
+    ensure_path_mounted(LAST_LOG_FILE);
+    rotate_last_logs(5);
     get_args(&argc, &argv);
 
     int previous_runs = 0;
@@ -857,13 +913,13 @@ main(int argc, char **argv) {
 
     Device* device = make_device();
     ui = device->GetUI();
+    gCurrentUI = ui;
 
     ui->Init();
     ui->SetLocale(locale);
     ui->SetBackground(RecoveryUI::NONE);
     if (show_text) ui->ShowText(true);
 
-#ifdef HAVE_SELINUX
     struct selinux_opt seopts[] = {
       { SELABEL_OPT_PATH, "/file_contexts" }
     };
@@ -874,7 +930,6 @@ main(int argc, char **argv) {
         fprintf(stderr, "Warning: No file_contexts\n");
         ui->Print("Warning:  No file_contexts\n");
     }
-#endif
 
     device->StartRecovery();
 
@@ -893,7 +948,7 @@ main(int argc, char **argv) {
             char* modified_path = (char*)malloc(len);
             strlcpy(modified_path, "/cache/", len);
             strlcat(modified_path, update_package+6, len);
-            printf("(replacing path \"%s\" with \"%s\")\n",
+            LOGI("Replacing path \"%s\" with \"%s\"\n",
                    update_package, modified_path);
             update_package = modified_path;
         }
@@ -906,13 +961,32 @@ main(int argc, char **argv) {
     int status = INSTALL_SUCCESS;
 
     if (update_package != NULL) {
+        LOGI("Install package %s\n", update_package);
         status = install_package(update_package, &wipe_cache, TEMPORARY_INSTALL_FILE);
         if (status == INSTALL_SUCCESS && wipe_cache) {
+            LOGI("Package %s installed. Erase cache volume\n", update_package);
             if (erase_volume("/cache")) {
                 LOGE("Cache wipe (requested by package) failed.");
             }
         }
-        if (status != INSTALL_SUCCESS) ui->Print("Installation aborted.\n");
+        if (status != INSTALL_SUCCESS) {
+            LOGE("Install of %s failed with status %d\n", update_package, status);
+            create_recoveryfail_file();
+            ui->Print("Installation aborted.\n");
+
+            // If this is an eng or userdebug build, then automatically
+            // turn the text display on if the script fails so the error
+            // message is visible.
+            char buffer[PROPERTY_VALUE_MAX+1];
+            property_get("ro.build.fingerprint", buffer, "");
+            if (strstr(buffer, ":userdebug/") || strstr(buffer, ":eng/")) {
+                ui->ShowText(true);
+            }
+        }
+
+        if (unlink(update_package) < 0 && errno != ENOENT) {
+            LOGE("Delete %s failed (%s)\n", update_package, strerror(errno));
+        }
     } else if (wipe_data) {
         if (device->WipeData()) status = INSTALL_ERROR;
         if (erase_volume("/data")) status = INSTALL_ERROR;
@@ -927,15 +1001,26 @@ main(int argc, char **argv) {
     }
 
     if (status == INSTALL_ERROR || status == INSTALL_CORRUPT) {
+        LOGE("Installation failed with status %d\n", status);
         ui->SetBackground(RecoveryUI::ERROR);
     }
     if (status != INSTALL_SUCCESS || ui->IsTextVisible()) {
+        if (status == INSTALL_NONE) {
+            // Set to default timeout
+            LOGI("Set timeout to %d s.\n", UI_WAIT_KEY_TIMEOUT_SEC);
+            ui->SetTimeout(UI_WAIT_KEY_TIMEOUT_SEC);
+        } else {
+            LOGI("Set timeout to %d s.\n", UI_WAIT_ERROR_TIMEOUT_SEC);
+            ui->SetTimeout(UI_WAIT_ERROR_TIMEOUT_SEC);
+        }
         prompt_and_wait(device, status);
     }
 
     // Otherwise, get ready to boot the main system...
     finish_recovery(send_intent);
     ui->Print("Rebooting...\n");
+
+    LOGI("Rebooting flag=0\n");
     android_reboot(ANDROID_RB_RESTART, 0, 0);
     return EXIT_SUCCESS;
 }
