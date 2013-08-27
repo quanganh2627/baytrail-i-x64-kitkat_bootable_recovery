@@ -52,11 +52,6 @@ void load_volume_table() {
     int alloc = 2;
     device_volumes = (Volume*)malloc(alloc * sizeof(Volume));
 
-    if (device_volumes == NULL) {
-        LOGE("failed to allocate device volumes (%s)\n", strerror(errno));
-        return;
-    }
-
     // Insert an entry for /tmp, which is the ramdisk and is always mounted.
     device_volumes[0].mount_point = "/tmp";
     device_volumes[0].fs_type = "ramdisk";
@@ -99,11 +94,6 @@ void load_volume_table() {
             while (num_volumes >= alloc) {
                 alloc *= 2;
                 device_volumes = (Volume*)realloc(device_volumes, alloc*sizeof(Volume));
-
-                if (device_volumes == NULL) {
-                    LOGE("failed to reallocate device volumes (%s)\n", strerror(errno));
-                    return;
-                }
             }
             device_volumes[num_volumes].mount_point = strdup(mount_point);
             device_volumes[num_volumes].fs_type = strdup(fs_type);
@@ -173,7 +163,6 @@ int ensure_path_mounted(const char* path) {
         return 0;
     }
 
-    mkdir("/mnt", 0755);  // in case it doesn't already exist
     mkdir(v->mount_point, 0755);  // in case it doesn't already exist
 
     if (strcmp(v->fs_type, "yaffs2") == 0) {

@@ -74,18 +74,13 @@ else
   LOCAL_STATIC_LIBRARIES += $(TARGET_RECOVERY_UI_LIB)
 endif
 
-#libpixelflinger_static for x86 is using encoder under hardware/intel/apache-harmony
-ifeq ($(TARGET_ARCH),x86)
-LOCAL_STATIC_LIBRARIES += libenc
-endif
-
 ifeq ($(HAVE_SELINUX),true)
   LOCAL_C_INCLUDES += external/libselinux/include
   LOCAL_STATIC_LIBRARIES += libselinux
   LOCAL_CFLAGS += -DHAVE_SELINUX
 endif # HAVE_SELINUX
 
-LOCAL_C_INCLUDES += system/extras/ext4_utils bionic/libc/private
+LOCAL_C_INCLUDES += system/extras/ext4_utils
 
 include $(BUILD_EXECUTABLE)
 
@@ -105,9 +100,6 @@ LOCAL_STATIC_LIBRARIES := \
     libcutils \
     libstdc++ \
     libc
-
-LOCAL_C_INCLUDES += bionic/libc/private
-
 include $(BUILD_EXECUTABLE)
 
 
