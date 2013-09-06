@@ -230,6 +230,10 @@ load_keys(const char* filename, int* numKeys) {
         while (!done) {
             ++*numKeys;
             out = (RSAPublicKey*)realloc(out, *numKeys * sizeof(RSAPublicKey));
+            if (!out) {
+                LOGE("realloc failed at %s:%d\n!", __FILE__, __LINE__);
+                goto exit;
+            }
             RSAPublicKey* key = out + (*numKeys - 1);
 
             char start_char;
