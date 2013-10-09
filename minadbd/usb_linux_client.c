@@ -278,6 +278,11 @@ static void usb_adb_init()
 
     h = calloc(1, sizeof(usb_handle));
 
+    if (h == NULL) {
+        D("ERROR: pointer to usb structure is null\n");
+        return;
+    }
+
     h->write = usb_adb_write;
     h->read = usb_adb_read;
     h->kick = usb_adb_kick;
@@ -487,6 +492,11 @@ static void usb_ffs_init()
     D("[ usb_init - using FunctionFS ]\n");
 
     h = calloc(1, sizeof(usb_handle));
+
+    if (h == NULL) {
+        D("ERROR: pointer to usb ffs structure is null\n");
+        return;
+    }
 
     h->write = usb_ffs_write;
     h->read = usb_ffs_read;
