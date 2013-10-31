@@ -27,14 +27,14 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <mounts.h>
+#include <mtdutils.h>
 
 #include "cutils/misc.h"
 #include "cutils/properties.h"
 #include "edify/expr.h"
 #include "mincrypt/sha.h"
 #include "minzip/DirUtil.h"
-#include "mtdutils/mounts.h"
-#include "mtdutils/mtdutils.h"
 #include "updater.h"
 #include "applypatch/applypatch.h"
 

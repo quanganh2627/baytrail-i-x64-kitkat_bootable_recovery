@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <roots.h>
 
 #include "bootloader.h"
 #include "common.h"
@@ -37,7 +38,6 @@
 #include "install.h"
 #include "minui/minui.h"
 #include "minzip/DirUtil.h"
-#include "roots.h"
 #include "ui.h"
 #include "screen_ui.h"
 #include "device.h"
@@ -359,7 +359,7 @@ erase_volume(const char *volume) {
         tmplog_offset = 0;
     }
 
-    return format_volume(volume);
+    return format_volume(volume, NULL);
 }
 
 static char*

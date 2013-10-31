@@ -21,6 +21,8 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <mounts.h>
+#include <mtdutils.h>
 
 #include "common.h"
 #include "install.h"
@@ -28,8 +30,6 @@
 #include "minui/minui.h"
 #include "minzip/SysUtil.h"
 #include "minzip/Zip.h"
-#include "mtdutils/mounts.h"
-#include "mtdutils/mtdutils.h"
 #include "roots.h"
 #include "verifier.h"
 #include "ui.h"

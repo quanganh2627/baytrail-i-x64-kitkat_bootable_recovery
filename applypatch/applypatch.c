@@ -24,10 +24,10 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <mtdutils.h>
 
 #include "mincrypt/sha.h"
 #include "applypatch.h"
-#include "mtdutils/mtdutils.h"
 #include "edify/expr.h"
 
 static int LoadPartitionContents(const char* filename, FileContents* file);
