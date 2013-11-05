@@ -1,0 +1,24 @@
+#size_hint=10
+/bootloader   	vfat	/dev/block/sda1 	length=0
+#size_hint=10
+/bootloader2   	vfat	/dev/block/sda2 	length=0
+#size_hint=10
+/boot   	vfat   	/dev/block/sda3 	length=0
+#size_hint=20
+/recovery 	vfat  	/dev/block/sda4 	length=0
+#size_hint=10
+/misc   	ext4  	/dev/block/sda5 	length=0
+#size_hint=1024
+/cache  	ext4  	/dev/block/sda6 	length=0
+#size_hint=10
+/install   	ext4  	/dev/block/sda7 	length=0
+#size_hint=10
+/factory    	ext4  	/dev/block/sda8 	length=0
+#size_hint=2048
+/system  	ext4  	/dev/block/sda9 	length=0
+#size_hint=-1
+/data    	ext4  	/dev/block/sda10	length=-16384
+#size_hint=10
+/fastboot	vfat	/dev/block/sda11	length=0
+
+/mnt/sdcard	vfat  	/dev/block/sdb1 	length=0
