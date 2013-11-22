@@ -170,6 +170,11 @@ static void get_memory_surface(GGLSurface* ms) {
   ms->height = vi.yres;
   ms->stride = fi.line_length/PIXEL_SIZE;
   ms->data = malloc(fi.line_length * vi.yres);
+  if (!ms->data) {
+    printf("malloc failed at %s:%d!\n", __FILE__, __LINE__);
+    return;
+  }
+
   ms->format = PIXEL_FORMAT;
 }
 
@@ -325,6 +330,10 @@ unsigned int gr_get_height(gr_surface surface) {
 static void gr_init_font(void)
 {
     gr_font = calloc(sizeof(*gr_font), 1);
+    if (!gr_font) {
+        printf("calloc failed at %s:%d!\n", __FILE__, __LINE__);
+        return;
+    }
 
     int res = res_create_surface("font", (void**)&(gr_font->texture));
     if (res == 0) {
@@ -338,11 +347,19 @@ static void gr_init_font(void)
 
         // fall back to the compiled-in font.
         gr_font->texture = malloc(sizeof(*gr_font->texture));
+        if (!gr_font->texture) {
+            printf("malloc failed at %s:%d!\n", __FILE__, __LINE__);
+            return;
+        }
         gr_font->texture->width = font.width;
         gr_font->texture->height = font.height;
         gr_font->texture->stride = font.width;
 
         unsigned char* bits = malloc(font.width * font.height);
+        if (!bits) {
+            printf("malloc failed at %s:%d!\n", __FILE__, __LINE__);
+            return;
+        }
         gr_font->texture->data = (void*) bits;
 
         unsigned char data;
@@ -385,8 +402,8 @@ int gr_init(void)
 
     get_memory_surface(&gr_mem_surface);
 
-    fprintf(stderr, "framebuffer: fd %d (%d x %d)\n",
-            gr_fb_fd, gr_framebuffer[0].width, gr_framebuffer[0].height);
+    printf("framebuffer: fd %d (%d x %d)\n",
+           gr_fb_fd, gr_framebuffer[0].width, gr_framebuffer[0].height);
 
         /* start with 0 as front (displayed) and 1 as back (drawing) */
     gr_active_fb = 0;

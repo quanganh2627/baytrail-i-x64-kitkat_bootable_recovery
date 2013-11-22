@@ -63,6 +63,8 @@ try_update_binary(const char *path, ZipArchive *zip, int* wipe_cache) {
         LOGE("Can't make %s\n", binary);
         return INSTALL_ERROR;
     }
+
+    LOGI("Extract and run update-binary\n");
     bool ok = mzExtractZipEntryToFile(zip, binary_entry, fd);
     close(fd);
     mzCloseZipArchive(zip);
@@ -122,7 +124,7 @@ try_update_binary(const char *path, ZipArchive *zip, int* wipe_cache) {
     if (pid == 0) {
         close(pipefd[0]);
         execv(binary, (char* const*)args);
-        fprintf(stdout, "E:Can't run %s (%s)\n", binary, strerror(errno));
+        LOGE("Can't run %s (%s)\n", binary, strerror(errno));
         _exit(-1);
     }
     close(pipefd[1]);
@@ -154,6 +156,7 @@ try_update_binary(const char *path, ZipArchive *zip, int* wipe_cache) {
             } else {
                 ui->Print("\n");
             }
+            fflush(stdout);
         } else if (strcmp(command, "wipe_cache") == 0) {
             *wipe_cache = 1;
         } else if (strcmp(command, "clear_display") == 0) {
@@ -179,8 +182,10 @@ really_install_package(const char *path, int* wipe_cache)
 {
     ui->SetBackground(RecoveryUI::INSTALLING_UPDATE);
     ui->Print("Finding update package...\n");
-    ui->SetProgressType(RecoveryUI::INDETERMINATE);
-    LOGI("Update location: %s\n", path);
+    // Give verification half the progress bar...
+    ui->SetProgressType(RecoveryUI::DETERMINATE);
+    ui->ShowProgress(VERIFICATION_PROGRESS_FRACTION, VERIFICATION_PROGRESS_TIME);
+    LOGI("Update package location: %s\n", path);
 
     if (ensure_path_mounted(path) != 0) {
         LOGE("Can't mount %s\n", path);
@@ -190,17 +195,14 @@ really_install_package(const char *path, int* wipe_cache)
     ui->Print("Opening update package...\n");
 
     int numKeys;
-    RSAPublicKey* loadedKeys = load_keys(PUBLIC_KEYS_FILE, &numKeys);
+    Certificate* loadedKeys = load_keys(PUBLIC_KEYS_FILE, &numKeys);
     if (loadedKeys == NULL) {
         LOGE("Failed to load keys\n");
         return INSTALL_CORRUPT;
     }
     LOGI("%d key(s) loaded from %s\n", numKeys, PUBLIC_KEYS_FILE);
 
-    // Give verification half the progress bar...
     ui->Print("Verifying update package...\n");
-    ui->SetProgressType(RecoveryUI::DETERMINATE);
-    ui->ShowProgress(VERIFICATION_PROGRESS_FRACTION, VERIFICATION_PROGRESS_TIME);
 
     int err;
     err = verify_file(path, loadedKeys, numKeys);
@@ -223,6 +225,7 @@ really_install_package(const char *path, int* wipe_cache)
     /* Verify and install the contents of the package.
      */
     ui->Print("Installing update...\n");
+    LOGI("Installing update %s...\n", path);
     return try_update_binary(path, &zip, wipe_cache);
 }
 
@@ -234,9 +237,15 @@ install_package(const char* path, int* wipe_cache, const char* install_file)
         fputs(path, install_log);
         fputc('\n', install_log);
     } else {
-        LOGE("failed to open last_install: %s\n", strerror(errno));
+        LOGE("failed to open last_install log (%s)\n", strerror(errno));
     }
-    int result = really_install_package(path, wipe_cache);
+    int result;
+    // if (setup_install_mounts() != 0) {
+    //     LOGE("failed to set up expected mounts for install; aborting\n");
+    //     result = INSTALL_ERROR;
+    // } else {
+        result = really_install_package(path, wipe_cache);
+    // }
     if (install_log) {
         fputc(result == INSTALL_SUCCESS ? '1' : '0', install_log);
         fputc('\n', install_log);

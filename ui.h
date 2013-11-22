@@ -21,6 +21,10 @@
 #include <pthread.h>
 #include <time.h>
 
+// Define timeout to 10 seconds
+#define UI_WAIT_ERROR_TIMEOUT_SEC   10
+#define UI_WAIT_KEY_TIMEOUT_SEC	120
+
 // Abstract class for controlling the user interface during recovery.
 class RecoveryUI {
   public:
@@ -37,6 +41,9 @@ class RecoveryUI {
     // Set the overall recovery state ("background image").
     enum Icon { NONE, INSTALLING_UPDATE, ERASING, NO_COMMAND, ERROR };
     virtual void SetBackground(Icon icon) = 0;
+
+    // Set timeout before reboot.
+    virtual void SetTimeout(int timeout);
 
     // --- progress indicator ---
     enum ProgressType { EMPTY, INDETERMINATE, DETERMINATE };
@@ -80,7 +87,16 @@ class RecoveryUI {
     enum KeyAction { ENQUEUE, TOGGLE, REBOOT, IGNORE };
     virtual KeyAction CheckKey(int key);
 
+    // Called immediately before each call to CheckKey(), tell you if
+    // the key was long-pressed.
     virtual void NextCheckKeyIsLong(bool is_long_press);
+
+    // Called when a key is held down long enough to have been a
+    // long-press (but before the key is released).  This means that
+    // if the key is eventually registered (released without any other
+    // keys being pressed in the meantime), NextCheckKeyIsLong() will
+    // be called with "true".
+    virtual void KeyLongPress(int key);
 
     // --- menu display ---
 
@@ -108,8 +124,16 @@ private:
     int key_queue[256], key_queue_len;
     char key_pressed[KEY_MAX + 1];     // under key_queue_mutex
     int key_last_down;                 // under key_queue_mutex
-    clock_t key_down_time;             // under key_queue_mutex
+    bool key_long_press;               // under key_queue_mutex
+    int key_down_count;                // under key_queue_mutex
     int rel_sum;
+    int ui_timeout;
+
+    typedef struct {
+        RecoveryUI* ui;
+        int key_code;
+        int count;
+    } key_timer_t;
 
     pthread_t input_t;
 
@@ -117,6 +141,9 @@ private:
     static int input_callback(int fd, short revents, void* data);
     void process_key(int key_code, int updown);
     bool usb_connected();
+
+    static void* time_key_helper(void* cookie);
+    void time_key(int key_code, int count);
 };
 
 #endif  // RECOVERY_UI_H

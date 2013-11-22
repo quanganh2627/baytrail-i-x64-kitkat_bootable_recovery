@@ -36,7 +36,6 @@
 #include "screen_ui.h"
 #include "ui.h"
 
-#define UI_WAIT_KEY_TIMEOUT_SEC    120
 
 // There's only (at most) one of these objects, and global callbacks
 // (for pthread_create, and the input event system) need to find it,
@@ -46,9 +45,14 @@ static RecoveryUI* self = NULL;
 RecoveryUI::RecoveryUI() :
     key_queue_len(0),
     key_last_down(-1),
-    key_down_time(0) {
+    key_long_press(false),
+    key_down_count(0) {
     pthread_mutex_init(&key_queue_mutex, NULL);
     pthread_cond_init(&key_queue_cond, NULL);
+
+    // UI timeout is set to UI_WAIT_KEY_TIMEOUT_SEC by default
+    ui_timeout = UI_WAIT_KEY_TIMEOUT_SEC;
+
     self = this;
 }
 
@@ -112,19 +116,22 @@ void RecoveryUI::process_key(int key_code, int updown) {
     bool register_key = false;
     bool long_press = false;
 
-    const long long_threshold = CLOCKS_PER_SEC * 750 / 1000;
-
     pthread_mutex_lock(&key_queue_mutex);
     key_pressed[key_code] = updown;
     if (updown) {
+        ++key_down_count;
         key_last_down = key_code;
-        key_down_time = clock();
+        key_long_press = false;
+        pthread_t th;
+        key_timer_t* info = new key_timer_t;
+        info->ui = this;
+        info->key_code = key_code;
+        info->count = key_down_count;
+        pthread_create(&th, NULL, &RecoveryUI::time_key_helper, info);
+        pthread_detach(th);
     } else {
         if (key_last_down == key_code) {
-            long duration = clock() - key_down_time;
-            if (duration > long_threshold) {
-                long_press = true;
-            }
+            long_press = key_long_press;
             register_key = true;
         }
         key_last_down = -1;
@@ -152,6 +159,24 @@ void RecoveryUI::process_key(int key_code, int updown) {
     }
 }
 
+void* RecoveryUI::time_key_helper(void* cookie) {
+    key_timer_t* info = (key_timer_t*) cookie;
+    info->ui->time_key(info->key_code, info->count);
+    delete info;
+    return NULL;
+}
+
+void RecoveryUI::time_key(int key_code, int count) {
+    usleep(750000);  // 750 ms == "long"
+    bool long_press = false;
+    pthread_mutex_lock(&key_queue_mutex);
+    if (key_last_down == key_code && key_down_count == count) {
+        long_press = key_long_press = true;
+    }
+    pthread_mutex_unlock(&key_queue_mutex);
+    if (long_press) KeyLongPress(key_code);
+}
+
 void RecoveryUI::EnqueueKey(int key_code) {
     pthread_mutex_lock(&key_queue_mutex);
     const int queue_max = sizeof(key_queue) / sizeof(key_queue[0]);
@@ -177,15 +202,15 @@ int RecoveryUI::WaitKey()
 {
     pthread_mutex_lock(&key_queue_mutex);
 
-    // Time out after UI_WAIT_KEY_TIMEOUT_SEC, unless a USB cable is
-    // plugged in.
+    // Time out after UI_WAIT_KEY_TIMEOUT_SEC or UI_WAIT_ERROR_TIMEOUT_SEC,
+    // unless a USB cable is plugged in.
     do {
         struct timeval now;
         struct timespec timeout;
         gettimeofday(&now, NULL);
         timeout.tv_sec = now.tv_sec;
         timeout.tv_nsec = now.tv_usec * 1000;
-        timeout.tv_sec += UI_WAIT_KEY_TIMEOUT_SEC;
+        timeout.tv_sec += ui_timeout;
 
         int rc = 0;
         while (key_queue_len == 0 && rc != ETIMEDOUT) {
@@ -240,5 +265,12 @@ RecoveryUI::KeyAction RecoveryUI::CheckKey(int key) {
     return RecoveryUI::ENQUEUE;
 }
 
+void RecoveryUI::SetTimeout(int timeout) {
+    ui_timeout = timeout;
+}
+
 void RecoveryUI::NextCheckKeyIsLong(bool is_long_press) {
+}
+
+void RecoveryUI::KeyLongPress(int key) {
 }
