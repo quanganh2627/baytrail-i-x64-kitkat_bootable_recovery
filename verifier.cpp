@@ -262,12 +262,17 @@ load_keys(const char* filename, int* numKeys) {
         while (!done) {
             ++*numKeys;
             out = (Certificate*)realloc(out, *numKeys * sizeof(Certificate));
-			if (!out) {
+            if (!out) {
                 LOGE("realloc failed at %s:%d\n!", __FILE__, __LINE__);
                 goto exit;
             }
             Certificate* cert = out + (*numKeys - 1);
             cert->public_key = (RSAPublicKey*)malloc(sizeof(RSAPublicKey));
+
+            if (!cert->public_key) {
+                LOGE("malloc failed at %s:%d\n!", __FILE__, __LINE__);
+                goto exit;
+            }
 
             char start_char;
             if (fscanf(f, " %c", &start_char) != 1) goto exit;
@@ -294,6 +299,10 @@ load_keys(const char* filename, int* numKeys) {
                     default:
                         goto exit;
                 }
+            } else {
+                LOGE("wrong start_char '%c'\n", start_char);
+                cert->public_key->exponent = 0;
+                cert->hash_len = 0;
             }
 
             RSAPublicKey* key = cert->public_key;
