@@ -36,6 +36,7 @@
 #include "screen_ui.h"
 #include "ui.h"
 
+#define UI_WAIT_KEY_TIMEOUT_SEC    120
 
 // There's only (at most) one of these objects, and global callbacks
 // (for pthread_create, and the input event system) need to find it,
@@ -49,10 +50,6 @@ RecoveryUI::RecoveryUI() :
     key_down_count(0) {
     pthread_mutex_init(&key_queue_mutex, NULL);
     pthread_cond_init(&key_queue_cond, NULL);
-
-    // UI timeout is set to UI_WAIT_KEY_TIMEOUT_SEC by default
-    ui_timeout = UI_WAIT_KEY_TIMEOUT_SEC;
-
     self = this;
 }
 
@@ -202,15 +199,15 @@ int RecoveryUI::WaitKey()
 {
     pthread_mutex_lock(&key_queue_mutex);
 
-    // Time out after UI_WAIT_KEY_TIMEOUT_SEC or UI_WAIT_ERROR_TIMEOUT_SEC,
-    // unless a USB cable is plugged in.
+    // Time out after UI_WAIT_KEY_TIMEOUT_SEC, unless a USB cable is
+    // plugged in.
     do {
         struct timeval now;
         struct timespec timeout;
         gettimeofday(&now, NULL);
         timeout.tv_sec = now.tv_sec;
         timeout.tv_nsec = now.tv_usec * 1000;
-        timeout.tv_sec += ui_timeout;
+        timeout.tv_sec += UI_WAIT_KEY_TIMEOUT_SEC;
 
         int rc = 0;
         while (key_queue_len == 0 && rc != ETIMEDOUT) {
@@ -263,10 +260,6 @@ void RecoveryUI::FlushKeys() {
 
 RecoveryUI::KeyAction RecoveryUI::CheckKey(int key) {
     return RecoveryUI::ENQUEUE;
-}
-
-void RecoveryUI::SetTimeout(int timeout) {
-    ui_timeout = timeout;
 }
 
 void RecoveryUI::NextCheckKeyIsLong(bool is_long_press) {

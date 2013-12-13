@@ -21,10 +21,6 @@
 #include <pthread.h>
 #include <time.h>
 
-// Define timeout to 10 seconds
-#define UI_WAIT_ERROR_TIMEOUT_SEC   10
-#define UI_WAIT_KEY_TIMEOUT_SEC	120
-
 // Abstract class for controlling the user interface during recovery.
 class RecoveryUI {
   public:
@@ -41,9 +37,6 @@ class RecoveryUI {
     // Set the overall recovery state ("background image").
     enum Icon { NONE, INSTALLING_UPDATE, ERASING, NO_COMMAND, ERROR };
     virtual void SetBackground(Icon icon) = 0;
-
-    // Set timeout before reboot.
-    virtual void SetTimeout(int timeout);
 
     // --- progress indicator ---
     enum ProgressType { EMPTY, INDETERMINATE, DETERMINATE };
@@ -127,7 +120,6 @@ private:
     bool key_long_press;               // under key_queue_mutex
     int key_down_count;                // under key_queue_mutex
     int rel_sum;
-    int ui_timeout;
 
     typedef struct {
         RecoveryUI* ui;
