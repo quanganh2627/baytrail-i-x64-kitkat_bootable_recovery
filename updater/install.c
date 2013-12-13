@@ -46,6 +46,7 @@
 
 #ifdef USE_EXT4
 #include "make_ext4fs.h"
+int g_wipe_flag = WIPE_FALLBACK;
 #endif
 
 // mount(fs_type, partition_type, location, mount_point)
@@ -211,7 +212,9 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
     char* location;
     char* fs_size;
     char* mount_point;
-
+#ifdef USE_EXT4
+    char value[PROPERTY_VALUE_MAX];
+#endif
     if (ReadArgs(state, argv, 5, &fs_type, &partition_type, &location, &fs_size, &mount_point) < 0) {
         return NULL;
     }
@@ -264,7 +267,13 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
         result = location;
 #ifdef USE_EXT4
     } else if (strcmp(fs_type, "ext4") == 0) {
-        int status = make_ext4fs(location, atoll(fs_size), mount_point, sehandle);
+        /* get the wipe flag for unsecure, secure, or no wipe */
+        int len = property_get("ro.g_wipe_flag", value, NULL);
+        if (len == 1) {
+            g_wipe_flag = atoi(value);
+        }
+
+        int status = make_ext4fs(location, atoll(fs_size), mount_point, sehandle, g_wipe_flag);
         if (status != 0) {
             printf("%s: make_ext4fs failed (%d) on %s",
                     name, status, location);
@@ -285,6 +294,40 @@ done:
     return StringValue(result);
 }
 
+Value* RenameFn(const char* name, State* state, int argc, Expr* argv[]) {
+    char* result = NULL;
+    if (argc != 2) {
+        return ErrorAbort(state, "%s() expects 2 args, got %d", name, argc);
+    }
+
+    char* src_name;
+    char* dst_name;
+
+    if (ReadArgs(state, argv, 2, &src_name, &dst_name) < 0) {
+        return NULL;
+    }
+    if (strlen(src_name) == 0) {
+        ErrorAbort(state, "src_name argument to %s() can't be empty", name);
+        goto done;
+    }
+    if (strlen(dst_name) == 0) {
+        ErrorAbort(state, "dst_name argument to %s() can't be empty",
+                   name);
+        goto done;
+    }
+
+    if (rename(src_name, dst_name) != 0) {
+        ErrorAbort(state, "Rename of %s() to %s() failed, error %s()",
+          src_name, dst_name, strerror(errno));
+    } else {
+        result = dst_name;
+    }
+
+done:
+    free(src_name);
+    if (result != dst_name) free(dst_name);
+    return StringValue(result);
+}
 
 Value* DeleteFn(const char* name, State* state, int argc, Expr* argv[]) {
     char** paths = malloc(argc * sizeof(char*));
@@ -1425,6 +1468,7 @@ void RegisterInstallFunctions() {
 
     RegisterFunction("read_file", ReadFileFn);
     RegisterFunction("sha1_check", Sha1CheckFn);
+    RegisterFunction("rename", RenameFn);
 
     RegisterFunction("wipe_cache", WipeCacheFn);
 
