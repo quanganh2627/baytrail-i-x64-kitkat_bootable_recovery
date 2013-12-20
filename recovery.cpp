@@ -392,22 +392,35 @@ erase_volume(const char *volume) {
             while ((de = readdir(d)) != NULL) {
                 if (strncmp(de->d_name, "last", 4) == 0) {
                     saved_log_file* p = (saved_log_file*) malloc(sizeof(saved_log_file));
-                    strcpy(path+path_len, de->d_name);
-                    p->name = strdup(path);
-                    if (stat(path, &(p->st)) == 0) {
-                        // truncate files to 512kb
-                        if (p->st.st_size > (1 << 19)) {
-                            p->st.st_size = 1 << 19;
+                    if (p) {
+                        strcpy(path+path_len, de->d_name);
+                        p->name = strdup(path);
+                        if (stat(path, &(p->st)) == 0) {
+                            // truncate files to 512kb
+                            if (p->st.st_size > (1 << 19)) {
+                                p->st.st_size = 1 << 19;
+                            }
+                            p->data = (unsigned char*) malloc(p->st.st_size);
+                            if (p->data) {
+                                FILE* f = fopen(path, "rb");
+                                if (f != NULL) {
+                                    fread(p->data, 1, p->st.st_size, f);
+                                    fclose(f);
+                                    p->next = head;
+                                    head = p;
+                                } else {
+                                    printf("openfile %s failed: %s\n", path, strerror(errno));
+                                    free(p);
+                                }
+                            } else {
+                                printf("malloc failed\n");
+                                free(p);
+                            }
+                        } else {
+                            free(p);
                         }
-                        p->data = (unsigned char*) malloc(p->st.st_size);
-                        FILE* f = fopen(path, "rb");
-                        fread(p->data, 1, p->st.st_size, f);
-                        fclose(f);
-                        p->next = head;
-                        head = p;
-                    } else {
-                        free(p);
-                    }
+                    } else
+                        printf("malloc saved_log_file failed\n");
                 }
             }
             closedir(d);
@@ -425,18 +438,20 @@ erase_volume(const char *volume) {
 
     if (is_cache) {
         while (head) {
-            FILE* f = fopen_path(head->name, "wb");
-            if (f) {
-                fwrite(head->data, 1, head->st.st_size, f);
-                fclose(f);
-                chmod(head->name, head->st.st_mode);
-                chown(head->name, head->st.st_uid, head->st.st_gid);
+            if (head->name && head->data) {
+                FILE* f = fopen_path(head->name, "wb");
+                if (f) {
+                    fwrite(head->data, 1, head->st.st_size, f);
+                    fclose(f);
+                    chmod(head->name, head->st.st_mode);
+                    chown(head->name, head->st.st_uid, head->st.st_gid);
+                }
+                free(head->name);
+                free(head->data);
+                saved_log_file* temp = head->next;
+                free(head);
+                head = temp;
             }
-            free(head->name);
-            free(head->data);
-            saved_log_file* temp = head->next;
-            free(head);
-            head = temp;
         }
 
         // Any part of the log we'd copied to cache is now gone.
