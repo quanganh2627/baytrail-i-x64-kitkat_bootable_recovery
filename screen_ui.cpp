@@ -367,14 +367,14 @@ void ScreenRecoveryUI::progress_loop() {
 }
 
 void ScreenRecoveryUI::LoadBitmap(const char* filename, gr_surface* surface) {
-    int result = res_create_surface(filename, surface);
+    int result = res_create_display_surface(filename, surface);
     if (result < 0) {
         LOGE("missing bitmap %s\n(Code %d)\n", filename, result);
     }
 }
 
 void ScreenRecoveryUI::LoadLocalizedBitmap(const char* filename, gr_surface* surface) {
-    int result = res_create_localized_surface(filename, surface);
+    int result = res_create_localized_alpha_surface(filename, NULL, surface);
     if (result < 0) {
         LOGE("missing bitmap %s\n(Code %d)\n", filename, result);
     }

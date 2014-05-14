@@ -44,7 +44,6 @@ LOCAL_STATIC_LIBRARIES := \
     libmincrypt \
     libminadbd \
     libminui \
-    libpixelflinger_static \
     libpng \
     libfs_mgr \
     libcutils \
