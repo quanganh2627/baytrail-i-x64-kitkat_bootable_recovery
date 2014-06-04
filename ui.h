@@ -23,7 +23,7 @@
 
 // Define timeout to 10 seconds
 #define UI_WAIT_ERROR_TIMEOUT_SEC   10
-#define UI_WAIT_KEY_TIMEOUT_SEC	120
+#define UI_WAIT_KEY_TIMEOUT_SEC	60
 
 // Abstract class for controlling the user interface during recovery.
 class RecoveryUI {
