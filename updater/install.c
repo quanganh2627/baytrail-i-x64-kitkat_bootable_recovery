@@ -1451,6 +1451,10 @@ Value* RebootNowFn(const char* name, State* state, int argc, Expr* argv[]) {
     // zero out the 'command' field of the bootloader message.
     memset(buffer, 0, sizeof(((struct bootloader_message*)0)->command));
     FILE* f = fopen(filename, "r+b");
+    if (f == NULL) {
+        return ErrorAbort(state, "%s() failed to open %s", name, filename);
+    }
+
     fseek(f, offsetof(struct bootloader_message, command), SEEK_SET);
     fwrite(buffer, sizeof(((struct bootloader_message*)0)->command), 1, f);
     fclose(f);
@@ -1493,6 +1497,10 @@ Value* SetStageFn(const char* name, State* state, int argc, Expr* argv[]) {
     // arguments in case of the device restarting midway through
     // package installation.
     FILE* f = fopen(filename, "r+b");
+    if (f == NULL) {
+        return ErrorAbort(state, "%s() failed to open %s", name, filename);
+    }
+
     fseek(f, offsetof(struct bootloader_message, stage), SEEK_SET);
     int to_write = strlen(stagestr)+1;
     int max_size = sizeof(((struct bootloader_message*)0)->stage);
@@ -1519,6 +1527,10 @@ Value* GetStageFn(const char* name, State* state, int argc, Expr* argv[]) {
 
     char buffer[sizeof(((struct bootloader_message*)0)->stage)];
     FILE* f = fopen(filename, "rb");
+    if (f == NULL) {
+        return ErrorAbort(state, "%s() failed to open %s", name, filename);
+    }
+
     fseek(f, offsetof(struct bootloader_message, stage), SEEK_SET);
     fread(buffer, sizeof(buffer), 1, f);
     fclose(f);
