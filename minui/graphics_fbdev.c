@@ -58,13 +58,11 @@ minui_backend* open_fbdev() {
 
 static void fbdev_blank(minui_backend* backend __unused, bool blank)
 {
-#if 0
     int ret;
 
     ret = ioctl(fb_fd, FBIOBLANK, blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK);
     if (ret < 0)
         perror("ioctl(): blank");
-#endif
 }
 
 static void set_displayed_framebuffer(unsigned n)
