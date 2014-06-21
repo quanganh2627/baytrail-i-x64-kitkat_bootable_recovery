@@ -386,10 +386,8 @@ int adb_main()
 
     init_transport_registration();
 
-    if (access("/dev/android_adb", F_OK) == 0) {
-        // listen on USB
-        usb_init();
-    }
+    // listen on USB
+    usb_init();
 
     // listen on the default adb TCP port
     local_init(DEFAULT_ADB_LOCAL_TRANSPORT_PORT);
