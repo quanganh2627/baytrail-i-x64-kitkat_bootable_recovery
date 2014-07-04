@@ -1029,7 +1029,8 @@ main(int argc, char **argv) {
     }
 
     ui->SetLocale(locale);
-    ui->SetBackground(RecoveryUI::NONE);
+    /* ui->SetBackground(RecoveryUI::NONE); */
+    ui->SetBackground(RecoveryUI::INSTALLING_UPDATE);
     if (show_text) ui->ShowText(true);
 
     struct selinux_opt seopts[] = {
@@ -1057,6 +1058,9 @@ main(int argc, char **argv) {
         if (strncmp(update_package, "CACHE:", 6) == 0) {
             int len = strlen(update_package) + 10;
             char* modified_path = (char*)malloc(len);
+            if (NULL == modified_path) {
+                return -1;
+            }
             strlcpy(modified_path, "/cache/", len);
             strlcat(modified_path, update_package+6, len);
             LOGI("Replacing path \"%s\" with \"%s\"\n",
@@ -1118,6 +1122,7 @@ main(int argc, char **argv) {
         ui->SetBackground(RecoveryUI::ERROR);
     }
     if (status != INSTALL_SUCCESS || ui->IsTextVisible()) {
+        ui->ShowText(true);
         if (status == INSTALL_NONE) {
             // Set to default timeout
             LOGI("Set timeout to %d s.\n", UI_WAIT_KEY_TIMEOUT_SEC);
