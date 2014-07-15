@@ -999,6 +999,7 @@ main(int argc, char **argv) {
         case 'l': locale = optarg; break;
         case 'g': {
             if (stage == NULL || *stage == '\0') {
+                if (stage) free(stage);
                 char buffer[20] = "1/";
                 strncat(buffer, optarg, sizeof(buffer)-3);
                 stage = strdup(buffer);
@@ -1014,8 +1015,16 @@ main(int argc, char **argv) {
     if (locale == NULL) {
         load_locale_from_cache();
     }
-    printf("locale is [%s]\n", locale);
-    printf("stage is [%s]\n", stage);
+
+    if (locale != NULL)
+        printf("locale is [%s]\n", locale);
+    else
+        printf("locale is NULL\n");
+
+    if (stage != NULL)
+        printf("stage is [%s]\n", stage);
+    else
+        printf("stage is NULL\n");
 
     Device* device = make_device();
     ui = device->GetUI();
