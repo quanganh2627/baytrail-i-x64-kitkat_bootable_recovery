@@ -36,12 +36,9 @@
 #if defined(RECOVERY_BGRA)
 #define PIXEL_FORMAT GGL_PIXEL_FORMAT_BGRA_8888
 #define PIXEL_SIZE   4
-#elif defined(RECOVERY_RGBX)
+#else //default to RGBX_8888
 #define PIXEL_FORMAT GGL_PIXEL_FORMAT_RGBX_8888
 #define PIXEL_SIZE   4
-#else
-#define PIXEL_FORMAT GGL_PIXEL_FORMAT_RGB_565
-#define PIXEL_SIZE   2
 #endif
 
 static gr_surface fbdev_init(minui_backend*);
@@ -124,7 +121,7 @@ static gr_surface fbdev_init(minui_backend* backend) {
       vi.blue.length    = 8;
       vi.transp.offset  = 0;
       vi.transp.length  = 8;
-    } else if (PIXEL_FORMAT == GGL_PIXEL_FORMAT_RGBX_8888) {
+    } else { //(default PIXEL_FORMAT to RGBX_8888)
       vi.red.offset     = 24;
       vi.red.length     = 8;
       vi.green.offset   = 16;
@@ -133,15 +130,6 @@ static gr_surface fbdev_init(minui_backend* backend) {
       vi.blue.length    = 8;
       vi.transp.offset  = 0;
       vi.transp.length  = 8;
-    } else { /* RGB565*/
-      vi.red.offset     = 11;
-      vi.red.length     = 5;
-      vi.green.offset   = 5;
-      vi.green.length   = 6;
-      vi.blue.offset    = 0;
-      vi.blue.length    = 5;
-      vi.transp.offset  = 0;
-      vi.transp.length  = 0;
     }
     if (ioctl(fd, FBIOPUT_VSCREENINFO, &vi) < 0) {
         perror("failed to put fb0 info");
