@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <fcntl.h>
-
+#include <sys/mman.h>
 #include <fs_mgr.h>
 #include "mtdutils/mtdutils.h"
 #include "mtdutils/mounts.h"
@@ -216,13 +216,32 @@ int format_volume(const char* volume) {
         // if there's a key_loc that looks like a path, it should be a
         // block device for storing encryption metadata.  wipe it too.
         if (v->key_loc != NULL && v->key_loc[0] == '/') {
+            struct stat sb;
+
             LOGI("wiping %s\n", v->key_loc);
-            int fd = open(v->key_loc, O_WRONLY | O_CREAT, 0644);
+            if (stat(v->key_loc, &sb) == -1) {
+                LOGE("format_volume: failed to stat %s\n", v->key_loc);
+                return -1;
+            }
+            int fd = open(v->key_loc, O_RDWR | O_CREAT, 0644);
             if (fd < 0) {
                 LOGE("format_volume: failed to open %s\n", v->key_loc);
                 return -1;
             }
-            wipe_block_device(fd, get_file_size(fd));
+            if ((sb.st_mode & S_IFMT) == S_IFBLK)
+                wipe_block_device(fd, sb.st_size);
+            else if (((sb.st_mode & S_IFMT) == S_IFREG) && sb.st_size) {
+                void* map = mmap(0, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                if (map == MAP_FAILED) {
+                    LOGE("format_volume: mmap failed on %s\n", v->key_loc);
+                    return -1;
+                }
+                memset((char*)map, 0, sb.st_size);
+                munmap(map, sb.st_size);
+            } else {
+                 LOGE("format_volume: %s is not a blockdevice, neither a regular file\n", v->key_loc);
+                 return -1;
+            }
             close(fd);
         }
 
