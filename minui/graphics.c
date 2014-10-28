@@ -56,6 +56,10 @@ static unsigned char gr_current_a = 255;
 
 static GRSurface* gr_draw = NULL;
 
+#define LCD_BRIGHTNESS "/sys/class/leds/lcd-backlight/brightness"
+#define LCD_BACKLIGHT_OFF "0"
+#define LCD_BACKLIGHT_ON  "200"
+
 static bool outside(int x, int y)
 {
     return x < 0 || x >= gr_draw->width || y < 0 || y >= gr_draw->height;
@@ -405,5 +409,20 @@ int gr_fb_height(void)
 
 void gr_fb_blank(bool blank)
 {
+    int sys_fd;
+
+    printf("gr_fb_blank: %s\n", blank == true ? "true" : "flase");
     gr_backend->blank(gr_backend, blank);
+    if ((sys_fd = open(LCD_BRIGHTNESS, O_WRONLY)) == -1) {
+        printf("open brightness sys node failed\n");
+        return;
+    }
+    if (blank) {
+        if (write(sys_fd, LCD_BACKLIGHT_OFF, sizeof(LCD_BACKLIGHT_OFF)) == -1)
+			printf("write brightness sys node failed\n");
+    } else {
+        if(write(sys_fd, LCD_BACKLIGHT_ON, sizeof(LCD_BACKLIGHT_ON)) == -1)
+            printf("write brightness sys node failed\n");
+    }
+    close(sys_fd);
 }
