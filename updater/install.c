@@ -1447,7 +1447,7 @@ Value* RebootNowFn(const char* name, State* state, int argc, Expr* argv[]) {
     fclose(f);
     free(filename);
 
-    strcpy(buffer, "reboot,");
+    strcpy(buffer, "reboot,recovery_clear");
     if (property != NULL) {
         strncat(buffer, property, sizeof(buffer)-10);
     }

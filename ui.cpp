@@ -147,8 +147,8 @@ void RecoveryUI::process_key(int key_code, int updown) {
             break;
 
           case RecoveryUI::REBOOT:
-            android_reboot(ANDROID_RB_RESTART, 0, 0);
-            break;
+            android_reboot(ANDROID_RB_RESTART, 0, (char *)"recovery_clear");
+			break;
 
           case RecoveryUI::ENQUEUE:
             EnqueueKey(key_code);

@@ -1080,6 +1080,6 @@ main(int argc, char **argv) {
     // Otherwise, get ready to boot the main system...
     finish_recovery(send_intent);
     ui->Print("Rebooting...\n");
-    property_set(ANDROID_RB_PROPERTY, "reboot,");
-    return EXIT_SUCCESS;
+    property_set(ANDROID_RB_PROPERTY, "reboot,recovery_clear");
+	return EXIT_SUCCESS;
 }
